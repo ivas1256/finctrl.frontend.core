@@ -1,111 +1,105 @@
 import React, { Component } from "react";
 import { Container, Row, Table, Modal, Form } from "react-bootstrap";
 import Button from "react-bootstrap/esm/Button";
+import BootstrapTable from 'react-bootstrap-table-next';
+import cellEditFactory, { Type } from 'react-bootstrap-table2-editor';
 
 export class PaymentSources extends Component {
     constructor(props) {
         super(props);
-        this.state = {
-            show: false,
+        this.state = {            
             items: [],
-            categories: [],
-            currEntity: -1
+            categories: []            
         };
     }
-
-    handleClose = () => {
-        this.setState({ show: false });
-        this.setState({ currEntity: -1 })
-    }
-    handleShow = () => {
-        this.setState({ show: true });
-    }
-
+    
     componentDidMount = () => {
-        this.getList();
-    }
-
-    getList = () => {
-        fetch('api/paymentsource')
-            .then(r => r.json())
-            .then(r => this.setState({ items: r }))
-
+        // без задержки не работает, по возможности исправить
+        setTimeout(() => {            
+            fetch('api/paymentsource')
+                .then(r => r.json())
+                .then(r => {
+                    r.forEach(function(item, i, arr){
+                        if(item.category == null)
+                            item.category = {
+                                categoryId: -1,
+                                categoryName: '---'
+                            };
+                    });
+                    this.setState({ items: r })
+                })
+        }, 2000);
+        
+        var list = [];
         fetch('api/categories')
             .then(r => r.json())
-            .then(r => this.setState({ categories: r }))
+            .then(r => {
+                r.push({
+                    categoryId: -1,
+                    categoryName: '---'
+                })
+
+                r.forEach(function(item, i, arr){                    
+                    list[item.categoryId] = {
+                            value: item.categoryId,
+                            label: item.categoryName
+                        }
+                });
+                this.setState({categories: list});                
+            })    
     }
 
-    setCategoryClick = (id) => {
-        this.handleShow();
-        this.setState({ currEntity: id })
+    onTableChange(type, newState, currEntity, col){
+        console.log(currEntity);
+        if(newState === -1) return;
+        const requestOptions = {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currEntity)
+        };
+
+        fetch('api/paymentsource/' + currEntity.paymentSourceId, requestOptions)               
+            .then(data => {
+                if(!data.ok) {
+                    alert('Erorr');
+                    return;
+                }                
+                alert('saved!')
+            });
     }
-
-    save = (e) => {
-        e.preventDefault();
-        if (this.state.currEntity === -1)
-            return
-
-        fetch(`api/paymentsource/set_category/${this.state.currEntity}?categoryId=${this.state.selected}`)
-        .then(() => this.getList())
-
-        this.handleClose()
-    }
-
-    selectChanged = (id) =>{
-        this.setState({selected: id})
-    }
-
+ 
     render() {
+        var columns = [{
+            dataField: 'paymentSourceId',
+            text: 'ID',
+            editable: false
+        }, {
+            dataField: 'paymentSourceName',
+            text: 'Источник',                         
+        }, {
+            dataField: 'category.categoryId',
+            text: 'Категория',
+            formatter: (cell) => {
+                if (cell && this.state.categories && cell in this.state.categories) {                    
+                    return this.state.categories[cell].label
+                }
+                return ''
+            },
+            editor: {
+                type: Type.SELECT,
+                options: this.state.categories
+            }
+        }];
+
         return (
             <Container>
                 <Row>
-                    <Table>
-                        <thead>
-                            <tr>
-                                <th>Id</th>
-                                <th>Источник платежа</th>
-                                <th>Соотв. категория</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {this.state.items && this.state.items.map((obj) => (
-                                <tr key={obj.id}>
-                                    <td>{obj.id}</td>
-                                    <td>{obj.paymentSourceName}</td>
-                                    <td>{obj.category && obj.category.categoryName}</td>
-                                    <td><Button onClick={() => this.setCategoryClick(obj.id)}>Set category</Button></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
-                </Row>
-
-                <Modal show={this.state.show} onHide={this.handleClose}>
-                    <Modal.Header closeButton>
-                        <Modal.Title>Выбрать категорию</Modal.Title>
-                    </Modal.Header>
-                    <Form onSubmit={this.save}>
-                        <Modal.Body>
-                            <Form.Control as="select" name="categoryId"
-                                onChange={e => this.selectChanged(e.target.value)}>
-                                <option key="-1">Выберите...</option>
-                                {
-                                    this.state.categories && this.state.categories.map(({ categoryId, categoryName }) => (
-                                        <option key={categoryId} value={categoryId}>{categoryName}</option>
-                                    ))
-                                }
-                            </Form.Control>
-                        </Modal.Body>
-                        <Modal.Footer>
-                            <Button variant="secondary" onClick={this.handleClose}>
-                                Закрыть
-                            </Button>
-                            <Button type="submit" variant="primary">
-                                Сохранить
-                            </Button>
-                        </Modal.Footer>
-                    </Form>
-                </Modal>
+                    <BootstrapTable keyField='paymentSourceId'                         
+                            data={ this.state.items } columns={ columns } 
+                            onTableChange = { this.onTableChange }                        
+                            cellEdit={ cellEditFactory({ mode: 'click', blurToSave: false, afterSaveCell: this.onTableChange }) }                        
+                            striped hover condensed/>                    
+                </Row>                
             </Container>
         );
     }

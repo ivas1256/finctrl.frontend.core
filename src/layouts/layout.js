@@ -16,9 +16,12 @@ export class Layout extends Component {
                     </Nav>
                 </Col>
                 <Col>
-                    {this.props.children}
+                    
+                        {this.props.children}
+                    
                 </Col> 
             </Row>
-        </Container>)
+        </Container>
+        )
     }
 }
